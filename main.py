@@ -86,25 +86,6 @@ class CircDisplay:
 	def write(self):
 		self.neop.write()
 
-	'''
-		def loop(self, time_ms:int):
-			
-			if (time_ms - self.sample_timer) > self.dt:
-				self.sample_timer = time_ms
-				self.neop.fill((0,0,0))
-
-				point_ratio = (time_ms % self.point_run_ms) / self.point_run_ms
-				self.draw_point(point_ratio, CircDisplay.color_brightness(self.actual_color, 0.1))
-
-				pomodorro_ratio = (time_ms % POMODORO_TIME_MS) / POMODORO_TIME_MS
-				self.draw_pomodoro(pomodorro_ratio, POMODORO_COLOR)
-
-
-				self.set_brightness(BRIGHTNESS)
-
-				self.neop.write()
-	'''
-
 class Timer:
 	def __init__(self):
 		self.pause_time = None
@@ -338,6 +319,19 @@ class Core:
 			("long break", 1, LONG_BREAK_TIME_MS, LONG_BREAK_COLOR),
 		]
 		self.pom_idx = 0
+		self.pom_sequence = [
+			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
+			("short break", BREAK_TIME_MS, BREAK_COLOR),
+			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
+			("short break", BREAK_TIME_MS, BREAK_COLOR),
+			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
+			("short break", BREAK_TIME_MS, BREAK_COLOR),
+			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
+			("short break", BREAK_TIME_MS, BREAK_COLOR),
+			("long break", LONG_BREAK_TIME_MS, LONG_BREAK_COLOR),
+		]
+		self.pom2seq = [0, 1, 8]
+		self.pom_sequence_idx = 0
 
 		self.anim.set(0, 1000)
 		self.anim.color = self.pom_list[self.pom_idx][3]
@@ -356,6 +350,7 @@ class Core:
 				if self.butt.is_short_press():
 					self.pom_idx += 1
 					self.pom_idx %= len(self.pom_list)
+					self.pom_sequence_idx = self.pom2seq[self.pom_idx]
 					self.anim.set(0, 1000)
 					self.anim.color = self.pom_list[self.pom_idx][3]
 				
@@ -390,12 +385,13 @@ class Core:
 					self.anim.start_and_pulse()
 					self.state = 1
 					
+			# pomodoro end
 			elif self.state == 3:
 				if self.butt.is_short_press():
-					self.pom_idx += 1
-					self.pom_idx %= len(self.pom_list)
-					self.anim.set(1, self.pom_list[self.pom_idx][2])
-					self.anim.color = self.pom_list[self.pom_idx][3]
+					self.pom_sequence_idx += 1
+					self.pom_sequence_idx %= len(self.pom_sequence)
+					self.anim.set(1, self.pom_sequence[self.pom_sequence_idx][1])
+					self.anim.color = self.pom_sequence[self.pom_sequence_idx][2]
 					self.state = 1
 					
 
