@@ -13,13 +13,13 @@ BRIGHTNESS = 0.1
 
 POMODORO_END_COLOR = (255,255,255)
 
-POMODORO_TIME_MS = 60*1000
+POMODORO_TIME_MS = 25*60*1000
 POMODORO_COLOR = (255,30,0)
 
-BREAK_TIME_MS = 15*1000
+BREAK_TIME_MS = 5*60*1000
 BREAK_COLOR = (0,100,255)
 
-LONG_BREAK_TIME_MS = 30*1000
+LONG_BREAK_TIME_MS = 15*60*1000
 LONG_BREAK_COLOR = (0,220,255)
 
 
@@ -176,7 +176,7 @@ class Animation:
 		point_ratio = self.timer.actual_time()%self.point_time / self.point_time
 		self.display.draw_point(point_ratio, CircDisplay.color_brightness(self.color, self.point_brightness))
 
-		pomodorro_ratio = 1-self.timer.actual_time() / self.timer.set_time_ms
+		pomodorro_ratio = self.timer.actual_time() / self.timer.set_time_ms
 		self.display.draw_pomodoro(pomodorro_ratio, self.color)
 
 
