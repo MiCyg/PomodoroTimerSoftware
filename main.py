@@ -3,35 +3,67 @@ import time
 import neopixel
 from math import floor, ceil
 
-
-
 LED_NUMBER = 8
 BUTTON_PIN = 22
 LED_PIN = 13
 
-BRIGHTNESS = 0.1
+DISPLAY_DT_MS = 10
 
-POMODORO_END_COLOR = (255,255,255)
+BRIGHTNESS_GLOBAL = 0.1
 
-POMODORO_TIME_MS = 25*60*1000
+POMODORO_TIME_MS = 25*1000
 POMODORO_COLOR = (255,30,0)
 
-BREAK_TIME_MS = 5*60*1000
+BREAK_TIME_MS = 5*1000
 BREAK_COLOR = (0,220,255)
 
-LONG_BREAK_TIME_MS = 15*60*1000
+LONG_BREAK_TIME_MS = 15*1000
 LONG_BREAK_COLOR = (0,100,255)
+
+
+
+MENU_BATTERY_COLOR = (255, 242, 0)
+MENU_BRIGHTNESS_SET_COLOR = (0, 255, 110)
+MENU_SLEEP_COLOR = (140, 0, 255)
+MENU_BACK_COLOR = (255, 0, 0)
+
 
 
 class CircDisplay:
 	def __init__(self, led_pin:int, led_number:int):
 		self.neop = neopixel.NeoPixel(machine.Pin(led_pin), led_number)
-		# self.dt = dt_ms
+		self.neop.fill((0,0,0))
+		self.neop.write()
+		self.isEnable = True
 
-		self.sample_timer = 0
-		self.point_run_ms = 1500
 
-		self.actual_color = POMODORO_COLOR
+
+	def enable(self, isEnable:bool):
+		self.isEnable = isEnable
+		self.neop.fill((0,0,0))
+		self.neop.write()
+		
+
+	def send_draw(self, points:list[tuple]):
+		if self.isEnable:
+			for i, point in enumerate(points):
+				self.neop[i] = point
+			self.neop.write()
+
+
+
+	def loop(self, pixels):
+		self.send_draw(pixels)
+
+
+
+class DisplayDrawer:
+	def __init__(self, pixel_num):
+		self.pixels = [(0,0,0)]*pixel_num
+		self.pixel_num = pixel_num
+
+	def get_pixels(self):
+		return self.pixels
 
 	@staticmethod
 	def color_brightness(color, brightness):
@@ -43,48 +75,34 @@ class CircDisplay:
 
 	@staticmethod
 	def color_sum(color1, color2):
-		
 		return (min(int(color1[0]+color2[0]),255), min(int(color1[1]+color2[1]),255), min(int((color1[2]+color2[2])),255))
 
-	def set_brightness(self, brightness):
-		for i in range(self.neop.__len__()):
-			self.neop[i] = CircDisplay.color_brightness(self.neop[i], brightness)
-
 	def clear(self):
-		self.neop.fill((0,0,0))
+		for i in range(self.pixel_num):
+			self.pixels[i] = (0,0,0)
 
-	def draw_pomodoro(self, ratio, color):
-
-		fullLedsNumber = (ratio * LED_NUMBER)%LED_NUMBER
-
-		idx = -1
-		for idx in range(int(fullLedsNumber)):
-			self.neop[idx] = CircDisplay.color_sum(self.neop[idx], color)
-
-		if fullLedsNumber < LED_NUMBER:
-			color = CircDisplay.color_brightness(color, (fullLedsNumber-int(fullLedsNumber)))
-			self.neop[idx+1] = CircDisplay.color_sum(self.neop[idx+1], color)
-		
-	def draw_point(self, ratio:float, color:tuple):
-
-		point_position = (ratio * LED_NUMBER)%LED_NUMBER
+	def point(self, coord:float, color:tuple):
+		point_position = (coord * self.pixel_num)%self.pixel_num
 
 		idx_left = floor(point_position)
 		idx_right = ceil(point_position)
 
 		if idx_left == idx_right:
-			self.neop[idx_right] = CircDisplay.color_sum(self.neop[idx_right], color)
+			self.pixels[idx_right] = DisplayDrawer.color_sum(self.pixels[idx_right], color)
 		else:
-			# CircDisplay.color_sum(CircDisplay.color_brightness(color, abs(idx_right-point_position)), self.neop[idx_left%LED_NUMBER])
-			self.neop[idx_right%LED_NUMBER] = CircDisplay.color_sum(CircDisplay.color_brightness(color, abs(point_position-idx_left)), self.neop[idx_right%LED_NUMBER])
-			self.neop[idx_left%LED_NUMBER] = CircDisplay.color_sum(CircDisplay.color_brightness(color, abs(idx_right-point_position)), self.neop[idx_left%LED_NUMBER])
+			# DisplayDrawer.color_sum(DisplayDrawer.color_brightness(color, abs(idx_right-point_position)), self.pixels[idx_left%self.pixel_num])
+			self.pixels[idx_right%self.pixel_num] = DisplayDrawer.color_sum(DisplayDrawer.color_brightness(color, abs(point_position-idx_left)), self.pixels[idx_right%self.pixel_num])
+			self.pixels[idx_left%self.pixel_num] = DisplayDrawer.color_sum(DisplayDrawer.color_brightness(color, abs(idx_right-point_position)), self.pixels[idx_left%self.pixel_num])
 
 	def fill(self, color:tuple):
-		for i in range(LED_NUMBER):
-			self.neop[i] = CircDisplay.color_sum(color, self.neop[i])
+		for i in range(self.pixel_num):
+			self.pixels[i] = DisplayDrawer.color_sum(color, self.pixels[i])
 
-	def write(self):
-		self.neop.write()
+	def set_brightness(self, brightness):
+		for i in range(self.pixel_num):
+			self.pixels[i] = DisplayDrawer.color_brightness(self.pixels[i], brightness)
+
+
 
 class Timer:
 	def __init__(self):
@@ -118,7 +136,6 @@ class Timer:
 	def reset(self) -> None:
 		self.pause_time = None
 		self.start_time = 0
-		self.set_time_ms = 0
 	
 
 	def is_end(self) -> bool:
@@ -127,275 +144,491 @@ class Timer:
 		else:
 			return False
 
-class Animation:
-
-	def __init__(self, display:CircDisplay, sample_ms:int=50):
-		self.display = display
-		self.display.clear()
-		self.display.write()
-
-		self.dt_ms = sample_ms
-		self.last_tick_ms = 0
-
-		self.anim_kind = 0
-		self.anim_kind_save = 0
-		self.timer = Timer()
-		self.pulseTimer = Timer()
-		self.blink_time = 1000
-		self.point_time = 3000
-		self.point_brightness = 0.5
-
-		self.color = (0,0,0)
-
-		self.disp_screenshot = []
-
-
-
-
-
-	def time_estimation(self):
-		point_ratio = self.timer.actual_time()%self.point_time / self.point_time
-		self.display.draw_point(point_ratio, CircDisplay.color_brightness(self.color, self.point_brightness))
-
-		pomodorro_ratio = self.timer.actual_time() / self.timer.set_time_ms
-		self.display.draw_pomodoro(pomodorro_ratio, self.color)
-
-
-	def blink(self):
-
-		if self.timer.is_end():
-			self.timer.set(self.timer.set_time_ms)
-			self.timer.start()
-
-		if self.timer.actual_time() > 500:
-			self.display.fill((0,0,0))
-		
-		elif self.timer.actual_time() > 0:
-			self.display.fill(self.color)
-
-		
-	def pulse(self):
-		if self.timer.is_end():
-			self.timer.set(self.timer.set_time_ms)
-			self.timer.start()
-		br = 0
-		if self.timer.actual_time() >= self.timer.set_time_ms/2:
-			br = (self.timer.actual_time()/self.timer.set_time_ms*2)-1
-		
-		elif self.timer.actual_time() >= 0:
-			br = 1-(self.timer.actual_time()/self.timer.set_time_ms*2)
-
-		self.display.fill(CircDisplay.color_brightness(self.color, br))
-		
-	def pulse_save(self):
-		if self.pulseTimer.is_end():
-			self.pulseTimer.set(self.pulseTimer.set_time_ms)
-			self.pulseTimer.start()
-
-		# print(self.timer.actual_time())
-		self.time_estimation()
-
-		br = 0
-		if self.pulseTimer.actual_time() >= self.pulseTimer.set_time_ms/2:
-			br = (self.pulseTimer.actual_time()/self.pulseTimer.set_time_ms*2)-1
-		
-		elif self.pulseTimer.actual_time() >= 0:
-			br = 1-(self.pulseTimer.actual_time()/self.pulseTimer.set_time_ms*2)
-
-		self.display.set_brightness(br)
-		
-	def stop_and_pulse(self):
-		self.timer.pause()
-		self.pulseTimer.set(2000)
-		self.pulseTimer.start()
-		self.anim_kind_save = self.anim_kind
-		self.anim_kind = 3
-		
-	def start_and_pulse(self):
-		self.timer.start()
-		self.pulseTimer.pause()
-		self.anim_kind = self.anim_kind_save
-		
-
-	def set(self, anim_kind:int, anim_time:int):
-		self.anim_kind = anim_kind
-		self.timer.set(anim_time)
-		self.timer.start()
-
-
-	def loop(self):
-		if (time.ticks_ms() - self.last_tick_ms) > self.dt_ms:
-			self.last_tick_ms = time.ticks_ms()
-
-			self.display.clear()
-
-			if self.anim_kind == 0:
-				self.blink()
-			elif self.anim_kind == 1:
-				self.time_estimation()
-
-				if self.timer.is_end():
-					self.anim_kind = 2
-					self.timer.set(3000)
-
-			elif self.anim_kind == 2:
-				self.pulse()
-
-			elif self.anim_kind == 3:
-				self.pulse_save()
-			
-
-			self.display.set_brightness(BRIGHTNESS)
-
-			self.display.write()
-
 class ButtonWrapper:
 	def __init__(self, button_pin, long_press_time_ms=1500, debouncing_time_ms=150):
 		self.timer = Timer()
 
 		self.button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
+		self.button.irq(trigger=machine.Pin.IRQ_FALLING, handler=self.button_cb, hard=False)
+		
 		self.deb_time_ms = debouncing_time_ms
 		self.long_press_time_ms = long_press_time_ms
 
-		self.state = 0
-
-		self.short_press = False
+		self.first_press_time = 0
+		
 		self.long_press = False
 
-	def is_short_press(self):
-		a = self.short_press
-		self.short_press = False
-		return a
+		self.short_press_func = None
+		self.long_press_func = None
 
-	def is_long_press(self):
-		a = self.long_press
+	def button_reset(self):
+		self.first_press_time = time.ticks_ms()
 		self.long_press = False
-		return a
+		self.short_press_func = None
+		self.long_press_func = None
+
+	def button_cb(self, pin) -> None:
+		# print("first press time", time.ticks_ms(), self.first_press_time)
+		if time.ticks_ms() - self.first_press_time > self.deb_time_ms:
+			self.first_press_time = time.ticks_ms()
+			if not pin.value():
+				if self.short_press_func:
+					self.short_press_func()
+
+	def set_short_press_callback(self, callback:function) -> None:
+		self.short_press_func = callback
+
+	def set_long_press_callback(self, callback:function) -> None:
+		self.long_press_func = callback
+	
+	def loop(self) -> None:
+		if not self.button.value():
+			if not self.long_press:
+				if time.ticks_ms() - self.first_press_time > self.long_press_time_ms:
+					self.long_press = True
+					if self.long_press_func:
+						self.long_press_func()
+		else:
+			self.long_press = False
+
+	def state(self) -> bool:
+		return bool(self.button.value())
+
+class Animation:
+	def __init__(self, pixel_num, animation_time):
+		self.drawer = DisplayDrawer(pixel_num)
+		self.timer = Timer()
+		# assert(animation_time == 0)
+		self.timer.set(animation_time)
+		# print("animation time", animation_time)
+		# print("timer set", self.timer.set_time_ms)
+
 
 	def loop(self):
-		if self.state == 0:
-			if not self.button.value():
-				self.state = 1
-				self.timer.set(self.deb_time_ms)
+		pass
+
+	def start(self):
+		self.timer.start()
+
+	def stop(self):
+		self.timer.pause()
+
+	def restart(self):
+		self.timer.reset()
+		self.timer.start()
+
+	def get_pixels(self):
+		return self.drawer.get_pixels()
+
+
+class RotatingPoint(Animation):
+	DIRECTION_RIGHT = 1
+	DIRECTION_LEFT = 2
+
+	def __init__(self, pixel_num, animation_time, color, direction, brightness=1.0,callback=None):
+		super().__init__(pixel_num, animation_time)
+		self.color = color
+		self.direction = direction
+		self.anim_dt = 10
+		self.brightness = brightness
+		self.end_cb = callback
+
+
+	def loop(self):
+		# print(self.timer.set_time_ms, self.timer.actual_time())
+		if self.direction == RotatingPoint.DIRECTION_RIGHT:
+			ratio = self.timer.actual_time() / self.timer.set_time_ms
+		elif self.direction == RotatingPoint.DIRECTION_LEFT:
+			ratio = 1 - (self.timer.actual_time() / self.timer.set_time_ms)
+		if ratio >= 1:
+			self.timer.reset()
+			if self.end_cb:
+				self.end_cb()
+			else:
+				self.timer.start()
+		# ratio = 0
+		self.drawer.clear()
+		# print(self.drawer.get_pixels())
+		self.drawer.point(ratio, self.color)
+		self.drawer.set_brightness(self.brightness)
+		# print(self.drawer.get_pixels())
+
+class PomodoroTimer(Animation):
+	def __init__(self, pixel_num, animation_time, color, brightness=1.0, callback=None):
+		super().__init__(pixel_num, animation_time)
+		self.color = color
+		self.anim_dt = 10
+		self.brightness = brightness
+		self.end_cb = callback
+
+	def draw_pomodoro(self, ratio, color):
+
+		fullLedsNumber = (ratio * self.drawer.pixel_num)%self.drawer.pixel_num
+
+		idx = -1
+		for idx in range(int(fullLedsNumber)):
+			color = self.drawer.color_sum(self.drawer.get_pixels()[idx], color)
+			self.drawer.point(idx/self.drawer.pixel_num, color)
+			
+
+		if fullLedsNumber < self.drawer.pixel_num:
+			color = self.drawer.color_brightness(color, (fullLedsNumber-int(fullLedsNumber)))
+			self.drawer.point((idx+1)/self.drawer.pixel_num, self.drawer.color_sum(self.drawer.get_pixels()[idx+1], color))
+
+
+	def loop(self):
+		# print(self.timer.set_time_ms, self.timer.actual_time())
+
+		ratio = self.timer.actual_time() / self.timer.set_time_ms
+		if ratio >= 1:
+			self.timer.reset()
+			if self.end_cb:
+				self.end_cb()
+			else:
+				self.timer.start()
+		# ratio = 0
+		self.drawer.clear()
+		# print(self.drawer.get_pixels())
+		self.draw_pomodoro(ratio, self.color)
+		self.drawer.set_brightness(self.brightness)
+		# self.drawer.point(ratio, self.drawer.color_brightness(self.color, 0.5))
+		# print(self.drawer.get_pixels())
+
+class PulseFill(Animation):
+
+	START_MAX = 0
+	START_MIN = 1
+
+	def __init__(self, pixel_num, animation_time, color, start_point, brightness=1.0, callback=None):
+		super().__init__(pixel_num, animation_time)
+		self.color = color
+		self.anim_dt = 10
+		self.start_point = start_point
+		self.brightness = brightness
+		self.end_cb = callback
+
+
+	def loop(self):
+
+		ratio = self.timer.actual_time() / self.timer.set_time_ms
+		if ratio >= 1:
+			self.timer.reset()
+			if self.end_cb:
+				self.end_cb()
+			else:
 				self.timer.start()
 
-		elif self.state == 1:
-			if self.timer.is_end():
-				if self.button.value():
-					self.state = 2
-				else:
-					self.state = 3
+		brightness = 0
 
-		elif self.state == 2:
-			self.short_press = True
-			self.timer.set(self.long_press_time_ms)
-			self.timer.start()
-			self.state = 3
+		self.drawer.clear()
 
-		elif self.state == 3:
-			if self.button.value():
-				self.state = 0
-			elif self.timer.is_end():
-				self.state = 4
+		if ratio<0.5:
+			brightness = ratio*2
+		elif ratio>=0.5 and ratio <1:
+			brightness = -(ratio*2)+2
 
-		elif self.state == 4:
-			self.long_press = True
-			self.state = 5
+		if self.start_point == PulseFill.START_MIN:
+			brightness = brightness
+		elif self.start_point == PulseFill.START_MAX:
+			brightness = 1-brightness
+		
+		self.drawer.fill(DisplayDrawer.color_brightness(self.color, brightness))
+		self.drawer.set_brightness(self.brightness)
 
-		elif self.state == 5:
-			if self.button.value():
-				self.state = 0
+		# self.drawer.point(ratio, self.drawer.color_brightness(self.color, 0.5))
+		# print(self.drawer.get_pixels())
+
+
+class PulsePoint(Animation):
+
+	def __init__(self, pixel_num, animation_time, color, point_ratio, brightness=1.0, callback=None):
+		super().__init__(pixel_num, animation_time)
+		self.color = color
+		self.anim_dt = 10
+		self.point_ratio = point_ratio
+		self.brightness = brightness
+		self.end_cb = callback
+
+
+	def loop(self):
+		ratio = self.timer.actual_time() / self.timer.set_time_ms
+		if ratio >= 1:
+			self.timer.reset()
+			if self.end_cb:
+				self.end_cb()
+			else:
+				self.timer.start()
+
+		brightness = 0
+
+		self.drawer.clear()
+
+		if ratio<0.5:
+			brightness = ratio*2
+		elif ratio>=0.5 and ratio <1:
+			brightness = -(ratio*2)+2
+
+		self.drawer.point(self.point_ratio, DisplayDrawer.color_brightness(self.color, brightness))
+		self.drawer.set_brightness(self.brightness)
+
+		# self.drawer.point(ratio, self.drawer.color_brightness(self.color, 0.5))
+		# print(self.drawer.get_pixels())
+
+class Point(Animation):
+
+	def __init__(self, pixel_num, color, point_ratio, brightness=1.0, callback=None):
+		super().__init__(pixel_num, 1)
+		self.color = color
+		self.point_ratio = point_ratio
+		self.brightness = brightness
+		self.end_cb = callback
+
+
+	def loop(self):
+
+		self.drawer.clear()
+		self.drawer.point(self.point_ratio, self.color)
+		self.drawer.set_brightness(self.brightness)
+
+
+class AnimationContainer:
+	def __init__(self, pixel_num:int, animations=None):
+		if animations:
+			self.animations = animations
+		else:
+			self.animations = []
+		self.pixel_num=pixel_num
+
+	def append(self, animation):
+		self.animations.append(animation)
+
+	def loop(self):
+		for anim in self.animations:
+			anim.loop()
+	
+	def start(self):
+		for anim in self.animations:
+			anim.start()
+
+	def stop(self):
+		for anim in self.animations:
+			anim.stop()
+		
+
+	def restart(self):
+		for anim in self.animations:
+			anim.restart()
+
+	def get_pixels(self):
+		# print("baba")
+		ret_pixels = [(0,0,0)]*self.pixel_num
+		# print(ret_pixels)
+		for anim in self.animations:
+			# print(anim)
+			anim_pixels = anim.get_pixels()
+			for i in range(self.pixel_num):
+				ret_pixels[i] = DisplayDrawer.color_sum(ret_pixels[i], anim_pixels[i])
+		
+		# print(ret_pixels)
+		return ret_pixels
+	
+	def get_animations(self):
+		return self.animations
+	
+class PomodoroTimerContainer(AnimationContainer):
+	def __init__(self, pixel_num:int, color, brightness, callback):
+		super().__init__(pixel_num)
+		self._build(color, brightness, callback)
+
+
+	def _build(self, color, brightness, cb):
+
+		self.append(RotatingPoint(LED_NUMBER, 2000, color, RotatingPoint.DIRECTION_RIGHT, 0.5*brightness))
+		self.append(PomodoroTimer(LED_NUMBER, POMODORO_TIME_MS, color, 0.5*brightness, cb))
+
+class PomodoroEndContainer(AnimationContainer):
+	def __init__(self, pixel_num:int, color, brightness, startPoint=None):
+		super().__init__(pixel_num)
+		self._build(color, brightness, startPoint)
+
+
+	def _build(self, color, brightness, startPoint):
+		endPulseTime = 5000
+
+		self.append(RotatingPoint(LED_NUMBER, 2137, color, RotatingPoint.DIRECTION_RIGHT, 0.3*brightness))
+		self.append(RotatingPoint(LED_NUMBER, 2666, color, RotatingPoint.DIRECTION_LEFT, 0.3*brightness))
+		if not startPoint:
+			self.append(PulseFill(LED_NUMBER, endPulseTime, color, PulseFill.START_MAX, 0.3*brightness))
+		else:
+			self.append(PulseFill(LED_NUMBER, endPulseTime, color, PulseFill.START_MIN, 0.3*brightness))
+
+
+class MenuContainer(AnimationContainer):
+	def __init__(self, pixel_num:int):
+		super().__init__(pixel_num)
+
+		self.choose_menu = 0
+		self.colors = [MENU_BATTERY_COLOR, MENU_BRIGHTNESS_SET_COLOR, MENU_SLEEP_COLOR, MENU_BACK_COLOR]
+
+		self._build_menu(self.choose_menu)
+
+
+	def _build_menu(self, choose_num):
+		self.animations = []
+		for i, col in enumerate(self.colors):
+			if i != choose_num:
+				self.append(Point(LED_NUMBER, col, i*2/LED_NUMBER, BRIGHTNESS_GLOBAL))
+			else:
+				self.append(PulsePoint(LED_NUMBER, 500, col, i*2/LED_NUMBER, BRIGHTNESS_GLOBAL))
+
+
+	def change_menu(self, choose_num):
+		for i, col in enumerate(self.colors):
+			if i != choose_num:
+				self.animations[i] = Point(LED_NUMBER, col, i*2/LED_NUMBER, BRIGHTNESS_GLOBAL)
+			else:
+				self.animations[i] = PulsePoint(LED_NUMBER, 500, col, i*2/LED_NUMBER, BRIGHTNESS_GLOBAL)
+
+	def perform_action(self):
+		self.choose_menu-=1
+		self.choose_menu=self.choose_menu % len(self.animations)
+		self.change_menu(self.choose_menu)
+
+		if self.choose_menu == 3:
+			print("back")
+
+
+	def hop_menu(self):
+		self.choose_menu+=1
+		self.choose_menu=self.choose_menu % len(self.animations)
+
+		self.change_menu(self.choose_menu)
+
+
+
+
+
 
 class Core:
 	def __init__(self):
-		display = CircDisplay(LED_PIN, LED_NUMBER)
-		self.anim = Animation(display)
+
 		self.butt = ButtonWrapper(BUTTON_PIN)
-		self.i = 0
 
-		self.pom_list = [
-			("pomodoro", 1, POMODORO_TIME_MS, POMODORO_COLOR),
-			("short break", 1, BREAK_TIME_MS, BREAK_COLOR),
-			("long break", 1, LONG_BREAK_TIME_MS, LONG_BREAK_COLOR),
+		self.display = CircDisplay(LED_PIN, LED_NUMBER)
+
+		self.menuContainer = MenuContainer(LED_NUMBER)
+		
+		pomodoroTimerContainer = PomodoroTimerContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL, self.increment_sequence)
+		pomodoroEndContainer = PomodoroEndContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL)
+
+		breakTimerContainer = PomodoroTimerContainer(LED_NUMBER, BREAK_COLOR, BRIGHTNESS_GLOBAL, self.increment_sequence)
+		breakEndContainer = PomodoroEndContainer(LED_NUMBER, BREAK_COLOR, BRIGHTNESS_GLOBAL)
+
+		longBreakTimerContainer = PomodoroTimerContainer(LED_NUMBER, LONG_BREAK_COLOR, BRIGHTNESS_GLOBAL, self.increment_sequence)
+		longBreakEndContainer = PomodoroEndContainer(LED_NUMBER, LONG_BREAK_COLOR, BRIGHTNESS_GLOBAL)
+
+		goToSleepContainer = PomodoroEndContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL)
+
+		self.anim_containers = [
+
+			pomodoroTimerContainer,
+			pomodoroEndContainer,
+			breakTimerContainer,
+			breakEndContainer,
+
+			pomodoroTimerContainer,
+			pomodoroEndContainer,
+			breakTimerContainer,
+			breakEndContainer,
+
+			pomodoroTimerContainer,
+			pomodoroEndContainer,
+			breakTimerContainer,
+			breakEndContainer,
+
+			pomodoroTimerContainer,
+			pomodoroEndContainer,
+			longBreakTimerContainer,
+			longBreakEndContainer,
 		]
-		self.pom_idx = 0
-		self.pom_sequence = [
-			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
-			("short break", BREAK_TIME_MS, BREAK_COLOR),
-			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
-			("short break", BREAK_TIME_MS, BREAK_COLOR),
-			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
-			("short break", BREAK_TIME_MS, BREAK_COLOR),
-			("pomodoro", POMODORO_TIME_MS, POMODORO_COLOR),
-			("short break", BREAK_TIME_MS, BREAK_COLOR),
-			("long break", LONG_BREAK_TIME_MS, LONG_BREAK_COLOR),
-		]
-		self.pom2seq = [0, 1, 8]
-		self.pom_sequence_idx = 0
 
-		self.anim.set(0, 1000)
-		self.anim.color = self.pom_list[self.pom_idx][3]
-		self.state = 0
+		self.wake_up()
 
 
+
+	def increment_sequence(self):
+		
+		self.animation_idx += 1
+		self.animation_idx = self.animation_idx %len(self.anim_containers)
+
+		self.actual_animationContainer = self.anim_containers[self.animation_idx]
+
+		self.actual_animationContainer.restart()
+		
+		print("anim:", self.animation_idx)
+
+	def go_to_menu(self):
+		self.actual_animationContainer = self.menuContainer
+		self.butt.set_short_press_callback(self.menuContainer.hop_menu)
+		self.butt.set_long_press_callback(self.menuContainer.perform_action)
+
+
+
+	def prepare_to_sleep(self):
+		self.display.enable(False)
+		self.butt.set_short_press_callback(None)
+		self.butt.set_long_press_callback(None)
+
+		print("idzie spac")
+		
+		time.sleep_ms(2000)
+		# state = machine.disable_irq()
+		while self.butt.button.value():
+			time.sleep_ms(2000)
+			
+		self.display.enable(True)
+
+		# machine.enable_irq(state)
+		print("wybudzony")
+		self.wake_up()
+
+
+
+
+	
+	def wake_up(self):
+
+		print("WAKE UP!")
+		self.display.enable(True)
+		self.actual_animationContainer = PomodoroEndContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL, 1)
+
+		self.animation_idx = -1
+
+		self.actual_animationContainer.start()
+
+		self.butt.button_reset()
+		self.butt.set_short_press_callback(self.increment_sequence)
+		self.butt.set_long_press_callback(self.prepare_to_sleep)
+
+		
 	def run(self):
-
+		disp_time = 0
 		while True:
 			self.butt.loop()
-			self.anim.loop()
 
-			# print(self.state, self.anim.timer.actual_time())
-			# choose type pomodoroo
-			if self.state == 0:
-				if self.butt.is_short_press():
-					self.pom_idx += 1
-					self.pom_idx %= len(self.pom_list)
-					self.pom_sequence_idx = self.pom2seq[self.pom_idx]
-					self.anim.set(0, 1000)
-					self.anim.color = self.pom_list[self.pom_idx][3]
-				
+			if time.ticks_ms() - disp_time > DISPLAY_DT_MS:
+				disp_time = time.ticks_ms()
+				self.actual_animationContainer.loop()
 
-				if self.butt.is_long_press():
-					print(self.pom_list[self.pom_idx][0])
-					self.anim.color = self.pom_list[self.pom_idx][3]
-					self.anim.set(1, self.pom_list[self.pom_idx][2])
-					self.state = 1
+				pixels = self.actual_animationContainer.get_pixels()
+				# print(pixels)
+				self.display.loop(pixels)
 
 
-			# pomodoro running
-			elif self.state == 1:
-
-				if self.anim.timer.is_end():
-					self.state = 3
-
-
-				if self.butt.is_short_press():
-					# self.anim.set(3, self.pom_list[self.pom_idx][2])
-					self.anim.stop_and_pulse()
-					self.state = 2
-					
-
-				if self.butt.is_long_press():
-					self.anim.set(0, self.pom_list[self.pom_idx][2])
-					self.state = 0
-
-			# pomodoro pause
-			elif self.state == 2:
-				if self.butt.is_short_press():
-					self.anim.start_and_pulse()
-					self.state = 1
-					
-			# pomodoro end
-			elif self.state == 3:
-				if self.butt.is_short_press():
-					self.pom_sequence_idx += 1
-					self.pom_sequence_idx %= len(self.pom_sequence)
-					self.anim.set(1, self.pom_sequence[self.pom_sequence_idx][1])
-					self.anim.color = self.pom_sequence[self.pom_sequence_idx][2]
-					self.state = 1
-					
 
 if __name__ == '__main__':
 	core = Core()
 	core.run()
+
+
 
