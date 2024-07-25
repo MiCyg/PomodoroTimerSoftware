@@ -1,0 +1,200 @@
+@startuml
+
+skinparam classAttributeIconSize 0
+
+package "Main Components" {
+    class Core {
+        - ButtonWrapper butt
+        - CircDisplay display
+        - MenuContainer menuContainer
+        - List anim_containers
+        - int animation_idx
+        - AnimationContainer actual_animationContainer
+        + Core()
+        + increment_sequence()
+        + go_to_menu()
+        + prepare_to_sleep()
+        + wake_up()
+        + run()
+    }
+
+    class ButtonWrapper {
+        - Timer timer
+        - machine.Pin button
+        - int deb_time_ms
+        - int long_press_time_ms
+        - int first_press_time
+        - bool long_press
+        - function short_press_func
+        - function long_press_func
+        + ButtonWrapper(button_pin, long_press_time_ms, debouncing_time_ms)
+        + button_reset()
+        + button_cb(pin)
+        + set_short_press_callback(callback)
+        + set_long_press_callback(callback)
+        + loop()
+        + state()
+    }
+
+    class CircDisplay {
+        - neopixel.NeoPixel neop
+        - bool isEnable
+        + CircDisplay(led_pin, led_number)
+        + enable(isEnable)
+        + send_draw(points)
+        + loop(pixels)
+    }
+
+    class Timer {
+        - int pause_time
+        - int start_time
+        - int set_time_ms
+        + Timer()
+        + set(time_ms)
+        + start()
+        + actual_time()
+        + pause()
+        + reset()
+        + is_end()
+    }
+}
+
+package "Animation" {
+    class Animation {
+        - DisplayDrawer drawer
+        - Timer timer
+        + Animation(pixel_num, animation_time)
+        + loop()
+        + start()
+        + stop()
+        + restart()
+        + get_pixels()
+    }
+
+    class AnimationContainer {
+        - List animations
+        - int pixel_num
+        + AnimationContainer(pixel_num, animations)
+        + append(animation)
+        + loop()
+        + start()
+        + stop()
+        + restart()
+        + get_pixels()
+        + get_animations()
+    }
+
+    class RotatingPoint extends Animation {
+        - tuple color
+        - int direction
+        - int anim_dt
+        - float brightness
+        - function end_cb
+        + RotatingPoint(pixel_num, animation_time, color, direction, brightness, callback)
+        + loop()
+    }
+
+    class PomodoroTimer extends Animation {
+        - tuple color
+        - int anim_dt
+        - float brightness
+        - function end_cb
+        + PomodoroTimer(pixel_num, animation_time, color, brightness, callback)
+        + draw_pomodoro(ratio, color)
+        + loop()
+    }
+
+    class PulseFill extends Animation {
+        - tuple color
+        - int anim_dt
+        - int start_point
+        - float brightness
+        - function end_cb
+        + PulseFill(pixel_num, animation_time, color, start_point, brightness, callback)
+        + loop()
+    }
+
+    class PulsePoint extends Animation {
+        - tuple color
+        - int anim_dt
+        - float point_ratio
+        - float brightness
+        - function end_cb
+        + PulsePoint(pixel_num, animation_time, color, point_ratio, brightness, callback)
+        + loop()
+    }
+
+    class Point extends Animation {
+        - tuple color
+        - float point_ratio
+        - float brightness
+        - function end_cb
+        + Point(pixel_num, color, point_ratio, brightness, callback)
+        + loop()
+    }
+}
+
+package "Containers" {
+    class PomodoroTimerContainer extends AnimationContainer {
+        - void _build(color, time, brightness, cb)
+        + PomodoroTimerContainer(pixel_num, color, time, brightness, callback)
+    }
+
+    class PomodoroEndContainer extends AnimationContainer {
+        - void _build(color, brightness, startPoint)
+        + PomodoroEndContainer(pixel_num, color, brightness, startPoint)
+    }
+
+    class MenuContainer extends AnimationContainer {
+        - int choose_menu
+        - list colors
+        - void _build_menu(choose_num)
+        + MenuContainer(pixel_num)
+        + change_menu(choose_num)
+        + perform_action()
+        + hop_menu()
+    }
+}
+
+package "Drawer" {
+    class DisplayDrawer {
+        - List pixels
+        - int pixel_num
+        + DisplayDrawer(pixel_num)
+        + get_pixels()
+        + static color_brightness(color, brightness)
+        + static color_mean(color1, color2)
+        + static color_sum(color1, color2)
+        + clear()
+        + point(coord, color)
+        + fill(color)
+        + set_brightness(brightness)
+    }
+}
+
+Core --> ButtonWrapper
+Core --> CircDisplay
+Core --> MenuContainer
+Core --> PomodoroTimerContainer
+Core --> PomodoroEndContainer
+Core --> AnimationContainer
+Core --> RotatingPoint
+Core --> PomodoroTimer
+Core --> PulseFill
+Core --> PulsePoint
+Core --> Point
+
+ButtonWrapper --> Timer
+CircDisplay --> neopixel.NeoPixel
+Animation --> DisplayDrawer
+Animation --> Timer
+AnimationContainer --> Animation
+PomodoroTimerContainer --> RotatingPoint
+PomodoroTimerContainer --> PomodoroTimer
+PomodoroEndContainer --> RotatingPoint
+PomodoroEndContainer --> PulseFill
+MenuContainer --> Point
+MenuContainer --> PulsePoint
+DisplayDrawer --> List
+
+@enduml

@@ -9,16 +9,25 @@ LED_PIN = 13
 
 DISPLAY_DT_MS = 10
 
-BRIGHTNESS_GLOBAL = 0.1
+BRIGHTNESS_GLOBAL = 0.5
 
-POMODORO_TIME_MS = 25*1000
+START_COLOR = (255,90,0)
+
+
+POMODORO_TIME_MS = 25*1000*60
 POMODORO_COLOR = (255,30,0)
+POMODORO_COLOR_START = (255,30,0)
+POMODORO_COLOR_END = (255,90,0)
 
-BREAK_TIME_MS = 5*1000
+BREAK_TIME_MS = 5*1000*60
 BREAK_COLOR = (0,220,255)
+BREAK_COLOR_START = (0,220,255)
+BREAK_COLOR_END = (0,220,255)
 
-LONG_BREAK_TIME_MS = 15*1000
+LONG_BREAK_TIME_MS = 15*1000*60
 LONG_BREAK_COLOR = (0,100,255)
+LONG_BREAK_COLOR_START = (0,100,255)
+LONG_BREAK_COLOR_END = (0,100,255)
 
 
 
@@ -436,15 +445,15 @@ class AnimationContainer:
 		return self.animations
 	
 class PomodoroTimerContainer(AnimationContainer):
-	def __init__(self, pixel_num:int, color, brightness, callback):
+	def __init__(self, pixel_num:int, color, time, brightness, callback):
 		super().__init__(pixel_num)
-		self._build(color, brightness, callback)
+		self._build(color, time, brightness, callback)
 
 
-	def _build(self, color, brightness, cb):
+	def _build(self, color, time, brightness, cb):
 
 		self.append(RotatingPoint(LED_NUMBER, 2000, color, RotatingPoint.DIRECTION_RIGHT, 0.5*brightness))
-		self.append(PomodoroTimer(LED_NUMBER, POMODORO_TIME_MS, color, 0.5*brightness, cb))
+		self.append(PomodoroTimer(LED_NUMBER, time, color, 0.5*brightness, cb))
 
 class PomodoroEndContainer(AnimationContainer):
 	def __init__(self, pixel_num:int, color, brightness, startPoint=None):
@@ -453,7 +462,7 @@ class PomodoroEndContainer(AnimationContainer):
 
 
 	def _build(self, color, brightness, startPoint):
-		endPulseTime = 5000
+		endPulseTime = 1000
 
 		self.append(RotatingPoint(LED_NUMBER, 2137, color, RotatingPoint.DIRECTION_RIGHT, 0.3*brightness))
 		self.append(RotatingPoint(LED_NUMBER, 2666, color, RotatingPoint.DIRECTION_LEFT, 0.3*brightness))
@@ -518,13 +527,13 @@ class Core:
 
 		self.menuContainer = MenuContainer(LED_NUMBER)
 		
-		pomodoroTimerContainer = PomodoroTimerContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL, self.increment_sequence)
+		pomodoroTimerContainer = PomodoroTimerContainer(LED_NUMBER, POMODORO_COLOR, POMODORO_TIME_MS, BRIGHTNESS_GLOBAL, self.increment_sequence)
 		pomodoroEndContainer = PomodoroEndContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL)
 
-		breakTimerContainer = PomodoroTimerContainer(LED_NUMBER, BREAK_COLOR, BRIGHTNESS_GLOBAL, self.increment_sequence)
+		breakTimerContainer = PomodoroTimerContainer(LED_NUMBER, BREAK_COLOR, BREAK_TIME_MS, BRIGHTNESS_GLOBAL, self.increment_sequence)
 		breakEndContainer = PomodoroEndContainer(LED_NUMBER, BREAK_COLOR, BRIGHTNESS_GLOBAL)
 
-		longBreakTimerContainer = PomodoroTimerContainer(LED_NUMBER, LONG_BREAK_COLOR, BRIGHTNESS_GLOBAL, self.increment_sequence)
+		longBreakTimerContainer = PomodoroTimerContainer(LED_NUMBER, LONG_BREAK_COLOR, LONG_BREAK_TIME_MS, BRIGHTNESS_GLOBAL, self.increment_sequence)
 		longBreakEndContainer = PomodoroEndContainer(LED_NUMBER, LONG_BREAK_COLOR, BRIGHTNESS_GLOBAL)
 
 		goToSleepContainer = PomodoroEndContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL)
@@ -600,7 +609,7 @@ class Core:
 
 		print("WAKE UP!")
 		self.display.enable(True)
-		self.actual_animationContainer = PomodoroEndContainer(LED_NUMBER, POMODORO_COLOR, BRIGHTNESS_GLOBAL, 1)
+		self.actual_animationContainer = PomodoroEndContainer(LED_NUMBER, START_COLOR, BRIGHTNESS_GLOBAL, 1)
 
 		self.animation_idx = -1
 
