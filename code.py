@@ -1,13 +1,19 @@
-import machine
+import microcontroller
+import watchdog
+import alarm.pin
+import board
+import alarm
 import time
 import neopixel
+import digitalio
 from math import floor, ceil
+from adafruit_debouncer import Debouncer, Button
 
 LED_NUMBER = 8
-BUTTON_PIN = 22
-LED_PIN = 13
+BUTTON_PIN = board.GP22
+LED_PIN = board.GP13
 
-DISPLAY_DT_MS = 10
+DISPLAY_DT_NS = 10000000
 
 BRIGHTNESS_GLOBAL = 0.5
 
@@ -25,7 +31,7 @@ BREAK_COLOR_START = (0,220,255)
 BREAK_COLOR_END = (0,220,255)
 
 LONG_BREAK_TIME_MS = 15*1000*60
-LONG_BREAK_COLOR = (0,100,255)
+LONG_BREAK_COLOR = (0,30,255)
 LONG_BREAK_COLOR_START = (0,100,255)
 LONG_BREAK_COLOR_END = (0,100,255)
 
@@ -40,9 +46,9 @@ MENU_BACK_COLOR = (255, 0, 0)
 
 class CircDisplay:
 	def __init__(self, led_pin:int, led_number:int):
-		self.neop = neopixel.NeoPixel(machine.Pin(led_pin), led_number)
+		self.neop = neopixel.NeoPixel(led_pin, led_number, auto_write=False)
 		self.neop.fill((0,0,0))
-		self.neop.write()
+		self.neop.show()
 		self.isEnable = True
 
 
@@ -50,14 +56,14 @@ class CircDisplay:
 	def enable(self, isEnable:bool):
 		self.isEnable = isEnable
 		self.neop.fill((0,0,0))
-		self.neop.write()
+		self.neop.show()
 		
 
 	def send_draw(self, points:list[tuple]):
 		if self.isEnable:
 			for i, point in enumerate(points):
 				self.neop[i] = point
-			self.neop.write()
+			self.neop.show()
 
 
 
@@ -112,7 +118,6 @@ class DisplayDrawer:
 			self.pixels[i] = DisplayDrawer.color_brightness(self.pixels[i], brightness)
 
 
-
 class Timer:
 	def __init__(self):
 		self.pause_time = None
@@ -126,9 +131,9 @@ class Timer:
 	
 	def start(self) -> None:
 		if not self.pause_time:
-			self.start_time = time.ticks_ms()
+			self.start_time = time.monotonic_ns()/1000000
 		else:
-			self.start_time = time.ticks_ms() - (self.pause_time - self.start_time)
+			self.start_time = time.monotonic_ns()/1000000 - (self.pause_time - self.start_time)
 		self.pause_time = None
 
 
@@ -137,10 +142,10 @@ class Timer:
 		if self.pause_time:
 			return self.pause_time - self.start_time
 		else:
-			return time.ticks_ms() - self.start_time
+			return time.monotonic_ns()/1000000 - self.start_time
 
 	def pause(self) -> None:
-		self.pause_time = time.ticks_ms()
+		self.pause_time = time.monotonic_ns()/1000000
 
 	def reset(self) -> None:
 		self.pause_time = None
@@ -148,41 +153,21 @@ class Timer:
 	
 
 	def is_end(self) -> bool:
-		if time.ticks_ms() - self.start_time > self.set_time_ms:
+		if time.monotonic_ns()/1000000 - self.start_time > self.set_time_ms:
 			return True
 		else:
 			return False
 
+
+
+
 class ButtonWrapper:
-	def __init__(self, button_pin, long_press_time_ms=1500, debouncing_time_ms=150):
-		self.timer = Timer()
+	def __init__(self, button_pin, long_press_time_ms=1500, debouncing_time_ms=100):
+		self.pin = digitalio.DigitalInOut(button_pin)
+		self.pin.direction = digitalio.Direction.INPUT
+		self.pin.pull = digitalio.Pull.UP
+		self.button = Button(self.pin, debouncing_time_ms, long_press_time_ms)
 
-		self.button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
-		self.button.irq(trigger=machine.Pin.IRQ_FALLING, handler=self.button_cb, hard=False)
-		
-		self.deb_time_ms = debouncing_time_ms
-		self.long_press_time_ms = long_press_time_ms
-
-		self.first_press_time = 0
-		
-		self.long_press = False
-
-		self.short_press_func = None
-		self.long_press_func = None
-
-	def button_reset(self):
-		self.first_press_time = time.ticks_ms()
-		self.long_press = False
-		self.short_press_func = None
-		self.long_press_func = None
-
-	def button_cb(self, pin) -> None:
-		# print("first press time", time.ticks_ms(), self.first_press_time)
-		if time.ticks_ms() - self.first_press_time > self.deb_time_ms:
-			self.first_press_time = time.ticks_ms()
-			if not pin.value():
-				if self.short_press_func:
-					self.short_press_func()
 
 	def set_short_press_callback(self, callback:function) -> None:
 		self.short_press_func = callback
@@ -191,17 +176,25 @@ class ButtonWrapper:
 		self.long_press_func = callback
 	
 	def loop(self) -> None:
-		if not self.button.value():
-			if not self.long_press:
-				if time.ticks_ms() - self.first_press_time > self.long_press_time_ms:
-					self.long_press = True
-					if self.long_press_func:
-						self.long_press_func()
-		else:
-			self.long_press = False
+		self.button.update()
+
+		if self.button.pressed:
+			if self.short_press_func:
+				self.short_press_func()
+
+		if self.button.long_press:
+			print("long_press")
+			if self.long_press_func:
+				self.long_press_func()
 
 	def state(self) -> bool:
 		return bool(self.button.value())
+
+	def deinit(self):
+		del self.button
+		self.pin.deinit()
+
+	
 
 class Animation:
 	def __init__(self, pixel_num, animation_time):
@@ -587,20 +580,14 @@ class Core:
 		self.display.enable(False)
 		self.butt.set_short_press_callback(None)
 		self.butt.set_long_press_callback(None)
+		self.butt.deinit()
+		self.wdt.deinit()
+		time.sleep(2)
 
-		print("idzie spac")
-		
-		time.sleep_ms(2000)
-		# state = machine.disable_irq()
-		while self.butt.button.value():
-			time.sleep_ms(2000)
-			
-		self.display.enable(True)
+		pinAlarm = alarm.pin.PinAlarm(BUTTON_PIN, value=False, pull=True)
+		alarm.exit_and_deep_sleep_until_alarms(pinAlarm)
 
-		# machine.enable_irq(state)
-		print("wybudzony")
-		self.wake_up()
-
+		print('THIS MESSAGE SHOULD NEVER HAPPEN!')
 
 
 
@@ -615,9 +602,12 @@ class Core:
 
 		self.actual_animationContainer.start()
 
-		self.butt.button_reset()
 		self.butt.set_short_press_callback(self.increment_sequence)
 		self.butt.set_long_press_callback(self.prepare_to_sleep)
+
+		self.wdt = microcontroller.watchdog
+		self.wdt.timeout = 8
+		self.wdt.mode = watchdog.WatchDogMode.RESET
 
 		
 	def run(self):
@@ -625,19 +615,20 @@ class Core:
 		while True:
 			self.butt.loop()
 
-			if time.ticks_ms() - disp_time > DISPLAY_DT_MS:
-				disp_time = time.ticks_ms()
+			if time.monotonic_ns() - disp_time > DISPLAY_DT_NS:
+				disp_time = time.monotonic_ns()
 				self.actual_animationContainer.loop()
 
 				pixels = self.actual_animationContainer.get_pixels()
 				# print(pixels)
 				self.display.loop(pixels)
+			
+			self.wdt.feed()
 
 
 
 if __name__ == '__main__':
 	core = Core()
 	core.run()
-
 
 
