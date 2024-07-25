@@ -32,9 +32,9 @@ To program and use the PomodoroTimer, follow these steps:
 - Run the code and start managing your time effectively with the Pomodoro Technique.
 
 ## Instruction
-After upload code timer has orange blinking light color. After short press button pomodoro timer start counting up to twenty five minutes. Leds slowly fill up a circle to strong red color. When time has to come, leds start blinking. Next short button press starts break timer has count up to fife minutes.
+After uploading the code, the timer's light blinks orange. A short press of the button starts the Pomodoro timer, counting up to twenty-five minutes. The LEDs gradually fill the circle, turning a solid red. When the time is up, the LEDs begin to blink. Pressing the button briefly again starts the break timer, which counts up to five minutes.
 
-If you end of study or work, you can power off device by long press button.
+To power off the device after finishing your study or work session, press and hold the button.
 
 ## Contributing
 
