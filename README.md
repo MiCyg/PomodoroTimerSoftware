@@ -7,7 +7,7 @@ Project in production
 ## Description
 
 
-The PomodoroTimer is a tool designed to assist with implementing the [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomodoro_Technique) for both work and study. This technique is a time management method that uses a timer to break work into intervals, traditionally 25 minutes in length, separated by 5 minutes breaks.
+The PomodoroTimer is a tool designed to assist with implementing the [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomodoro_Technique) for both work and study. This technique is a time management method that uses a timer to break work into intervals, traditionally 25 minutes in length, separated by fife minutes breaks.
 
 ## Features
 
