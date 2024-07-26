@@ -19,7 +19,8 @@ The PomodoroTimer is a tool designed to assist with implementing the [Pomodoro T
 ## Case 
 If you have some diy skills probably can you build your own enclosure. 
 Although if you do not have time for it, can you simply download and print my version. 
-Enclosure is prepared for 3D print. Stls are avaliable on [stl](stl) folder. Assembly Should be simple, as shown below.
+Enclosure is prepared for 3D print. Stls are avaliable on [stl](stl) folder. 
+If you familiar with autodesk inventor software, take a look for ipt files on my [GrabCad](https://grabcad.com/library/pomodorotimer-1). Assembly Should be simple, as shown below.
 
 ![case assembly](images/assembly.gif)
 
